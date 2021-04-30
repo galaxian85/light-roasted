@@ -57,8 +57,7 @@ public class SimpleChatServer {
       }
 
       @Override
-      public void failed(Throwable exc, Object attachment) {
-      }
+      public void failed(Throwable exc, Object attachment) {}
     });
   }
 
@@ -78,7 +77,10 @@ public class SimpleChatServer {
 
     @Override
     public void completed(Integer result, Object o) {
-      if (result == -1) return;
+      if (result == -1) { // disconnected
+        users.remove(asc);
+        return;
+      }
 
       byte[] bytes = new byte[result];
       bb.flip().get(bytes).clear();
@@ -103,15 +105,11 @@ public class SimpleChatServer {
         }
       }
 
-      try {
-        while (!inputs.isEmpty()) {
-          String message = inputs.poll() + "\r\n";
-          for (AsynchronousSocketChannel user : users) {
-            user.write(StandardCharsets.UTF_8.encode(message)).get();
-          }
+      while (!inputs.isEmpty()) {
+        String message = inputs.poll() + "\r\n";
+        for (AsynchronousSocketChannel user : users) {
+          user.write(StandardCharsets.UTF_8.encode(message));
         }
-      } catch (InterruptedException | ExecutionException e) {
-        e.printStackTrace();
       }
 
       asc.read(bb, null, this);
