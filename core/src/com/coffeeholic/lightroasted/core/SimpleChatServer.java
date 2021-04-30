@@ -19,13 +19,12 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class SimpleChatServer {
   private AsynchronousServerSocketChannel assc;
-  private final Set<AsynchronousSocketChannel> users = new HashSet<>();
+  private final Set<Player> players = new HashSet<>();
 
   public static void main(String[] args) throws Exception {
     SimpleChatServer server = new SimpleChatServer();
@@ -45,15 +44,13 @@ public class SimpleChatServer {
       @Override
       public void completed(AsynchronousSocketChannel asc, Object attachment) {
         assc.accept(null, this);
-        try {
-          asc.write(StandardCharsets.UTF_8.encode("Welcome to telnet chat server\r\n")).get();
-        } catch (InterruptedException | ExecutionException e) {
-          e.printStackTrace();
-        }
-        ByteBuffer bb = ByteBuffer.allocate(1024);
-        asc.read(bb, null, new ChatHandler(asc, bb));
 
-        users.add(asc);
+        ByteBuffer bb = ByteBuffer.allocate(1024);
+        Player player = new Player(new ASCConnection(asc));
+        player.println("Welcome to telnet chat server");
+        asc.read(bb, null, new ChatHandler(asc, bb, player));
+
+        players.add(player);
       }
 
       @Override
@@ -62,23 +59,24 @@ public class SimpleChatServer {
   }
 
   private class ChatHandler implements CompletionHandler<Integer, Object> {
-    private static final int BACKSPACE_KEY_CODE = 127;
     private final AsynchronousSocketChannel asc;
+    private final Player player;
     private final ByteBuffer bb;
-    private final MyByteArrayOutputStream baos = new MyByteArrayOutputStream();
+    private final BackspaceByteArrayOutputStream baos = new BackspaceByteArrayOutputStream();
     private final Queue<String> inputs = new LinkedList<>();
 
-    public ChatHandler(AsynchronousSocketChannel asc, ByteBuffer bb) {
+    public ChatHandler(AsynchronousSocketChannel asc, ByteBuffer bb, Player player) {
       this.asc = asc;
       this.bb = bb;
+      this.player = player;
     }
 
     private boolean firstChar = true;
 
     @Override
-    public void completed(Integer result, Object o) {
+    public void completed(Integer result, Object attachment) {
       if (result == -1) { // disconnected
-        users.remove(asc);
+        players.remove(player);
         return;
       }
 
@@ -96,7 +94,7 @@ public class SimpleChatServer {
             baos.reset();
             firstChar = true;
             continue;
-          case BACKSPACE_KEY_CODE:
+          case KeyCode.BACKSPACE:
             baos.backspace();
             continue;
           default:
@@ -106,9 +104,9 @@ public class SimpleChatServer {
       }
 
       while (!inputs.isEmpty()) {
-        String message = inputs.poll() + "\r\n";
-        for (AsynchronousSocketChannel user : users) {
-          user.write(StandardCharsets.UTF_8.encode(message));
+        String message = inputs.poll();
+        for (Player p : players) {
+          p.println(message);
         }
       }
 
@@ -116,10 +114,10 @@ public class SimpleChatServer {
     }
 
     @Override
-    public void failed(Throwable throwable, Object o) {}
+    public void failed(Throwable throwable, Object attachment) {}
   }
 
-  private static class MyByteArrayOutputStream extends ByteArrayOutputStream {
+  private static class BackspaceByteArrayOutputStream extends ByteArrayOutputStream {
     public void backspace() {
       if (count > 0) count--;
     }
