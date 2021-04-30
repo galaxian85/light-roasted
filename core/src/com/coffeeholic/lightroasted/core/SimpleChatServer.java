@@ -15,26 +15,16 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class SimpleChatServer {
   private AsynchronousServerSocketChannel assc;
-  private final Set<Player> players = new HashSet<>();
+  private final PlayerManager pm = PlayerManager.getInstance();
 
-  public static void main(String[] args) throws Exception {
-    SimpleChatServer server = new SimpleChatServer();
-    server.start();
-    while (true) {
-      Thread.sleep(5000L);
-    }
-  }
-
-  private void start() throws IOException {
+  public void start() throws IOException {
     ExecutorService pool = Executors.newSingleThreadExecutor();
     AsynchronousChannelGroup channelGroup = AsynchronousChannelGroup.withThreadPool(pool);
     assc = AsynchronousServerSocketChannel.open(channelGroup);
@@ -50,11 +40,13 @@ public class SimpleChatServer {
         player.println("Welcome to telnet chat server");
         asc.read(bb, null, new ChatHandler(asc, bb, player));
 
-        players.add(player);
+        pm.addPlayer(player);
       }
 
       @Override
-      public void failed(Throwable exc, Object attachment) {}
+      public void failed(Throwable exc, Object attachment) {
+        throw new RuntimeException(exc);
+      }
     });
   }
 
@@ -76,7 +68,7 @@ public class SimpleChatServer {
     @Override
     public void completed(Integer result, Object attachment) {
       if (result == -1) { // disconnected
-        players.remove(player);
+        pm.removePlayer(player);
         return;
       }
 
@@ -105,16 +97,16 @@ public class SimpleChatServer {
 
       while (!inputs.isEmpty()) {
         String message = inputs.poll();
-        for (Player p : players) {
-          p.println(message);
-        }
+        pm.forEach(p -> p.println(message));
       }
 
       asc.read(bb, null, this);
     }
 
     @Override
-    public void failed(Throwable throwable, Object attachment) {}
+    public void failed(Throwable exc, Object attachment) {
+      throw new RuntimeException(exc);
+    }
   }
 
   private static class BackspaceByteArrayOutputStream extends ByteArrayOutputStream {

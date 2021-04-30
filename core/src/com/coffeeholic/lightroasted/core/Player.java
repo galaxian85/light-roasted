@@ -2,6 +2,15 @@ package com.coffeeholic.lightroasted.core;
 
 public class Player {
   private final Connection connection;
+  private String accountName;
+
+  public String getAccountName() {
+    return accountName;
+  }
+
+  public void setAccountName(String accountName) {
+    this.accountName = accountName;
+  }
 
   public Player(Connection connection) {
     this.connection = connection;
