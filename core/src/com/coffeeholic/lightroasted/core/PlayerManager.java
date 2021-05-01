@@ -7,7 +7,7 @@ public class PlayerManager {
   private static final PlayerManager instance = new PlayerManager();
   private final Set<Player> players;
 
-  public PlayerManager() {
+  private PlayerManager() {
     players = Collections.synchronizedSet(new HashSet<>());
   }
 
