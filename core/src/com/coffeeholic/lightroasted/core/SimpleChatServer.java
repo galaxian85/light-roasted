@@ -18,44 +18,41 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class SimpleChatServer {
-  private AsynchronousServerSocketChannel assc;
-  private final PlayerManager pm = PlayerManager.getInstance();
 
-  public void start() throws IOException {
-    ExecutorService pool = Executors.newSingleThreadExecutor();
-    AsynchronousChannelGroup channelGroup = AsynchronousChannelGroup.withThreadPool(pool);
-    assc = AsynchronousServerSocketChannel.open(channelGroup);
-    assc.bind(new InetSocketAddress(4000));
-    assc.accept(null, new CompletionHandler<>() {
+  public void start(ExecutorService threadPool, int port) throws IOException {
+    AsynchronousChannelGroup channelGroup = AsynchronousChannelGroup.withThreadPool(threadPool);
+    AsynchronousServerSocketChannel assc = AsynchronousServerSocketChannel.open(channelGroup);
+    assc.bind(new InetSocketAddress(port));
+    assc.accept(assc, new CompletionHandler<>() {
 
       @Override
-      public void completed(AsynchronousSocketChannel asc, Object attachment) {
-        assc.accept(null, this);
+      public void completed(AsynchronousSocketChannel asc, AsynchronousServerSocketChannel assc) {
+        assc.accept(assc, this);
 
         ByteBuffer bb = ByteBuffer.allocate(1024);
         Player player = new Player(new ASCConnection(asc));
         player.println("Welcome to telnet chat server");
         asc.read(bb, null, new ChatHandler(asc, bb, player));
 
-        pm.addPlayer(player);
+        PlayerManager.getInstance().addPlayer(player);
       }
 
       @Override
-      public void failed(Throwable exc, Object attachment) {
+      public void failed(Throwable exc, AsynchronousServerSocketChannel assc) {
         throw new RuntimeException(exc);
       }
     });
   }
 
-  private class ChatHandler implements CompletionHandler<Integer, Object> {
+  private static class ChatHandler implements CompletionHandler<Integer, Object> {
     private final AsynchronousSocketChannel asc;
     private final Player player;
     private final ByteBuffer bb;
     private final BackspaceByteArrayOutputStream baos = new BackspaceByteArrayOutputStream();
     private final Queue<String> inputs = new LinkedList<>();
+    private final PlayerManager pm = PlayerManager.getInstance();
 
     public ChatHandler(AsynchronousSocketChannel asc, ByteBuffer bb, Player player) {
       this.asc = asc;
